@@ -1,3 +1,5 @@
+#Deteta se o slam parou (robot parou de mexer) e depois envia waypoints para o robot seguir
+
 import rclpy
 import math
 from rclpy.node import Node
@@ -30,7 +32,7 @@ class WaypointPublisher(Node):
         # For detecting stable pose
         self._last_pose = None  # (x,y,z,yaw)
         self._last_change_ns = self.get_clock().now().nanoseconds
-        self._stable_duration_sec = 10.0
+        self._stable_duration_sec = 40.0
         self._pos_tol = 1e-3
         self._yaw_tol = 0.01
 
@@ -42,8 +44,7 @@ class WaypointPublisher(Node):
         self._goal_yaw_tol = 0.2  # radians
         self._goal_stable_required_s = 2.0
         self._goal_reached_since_ns = None
-        self._last_goal_publish_ns = 0
-        self._goal_republish_interval_s = 1.0
+        self._goal_published = False
 
         # Load waypoints from config file
         try:
@@ -72,11 +73,10 @@ class WaypointPublisher(Node):
                 self._current_goal_idx = 0
                 self._publish_current_goal()
 
-        # If mission active and goal not yet reached, periodically re-publish goal
-        if self._missions_started and self._current_goal_idx is not None:
-            now_ns = self.get_clock().now().nanoseconds
-            if (now_ns - self._last_goal_publish_ns) / 1e9 >= self._goal_republish_interval_s:
-                self._publish_current_goal()
+        # If mission active, only publish goal once per waypoint
+        if self._missions_started and (self._current_goal_idx is not None) and (not self._goal_published):
+            self._publish_current_goal()
+            self._goal_published = True
 
     def odometry_callback(self, msg):  # deteta se a pose mudou
         x = msg.pose.pose.position.x
@@ -122,11 +122,13 @@ class WaypointPublisher(Node):
                         # advance to next goal
                         self._current_goal_idx += 1
                         self._goal_reached_since_ns = None
+                        self._goal_published = False
                         if self._current_goal_idx >= len(self._waypoints):
                             self.get_logger().info('All waypoints completed')
                             self._current_goal_idx = None
                         else:
                             self._publish_current_goal()
+                            self._goal_published = True
             else:
                 # not within tolerance
                 self._goal_reached_since_ns = None
@@ -201,7 +203,6 @@ class WaypointPublisher(Node):
         msg.pose.orientation.z = qz
         msg.pose.orientation.w = qw
         self.publisher_.publish(msg)
-        self._last_goal_publish_ns = now.nanoseconds
         self.get_logger().info(f'Published goal {wp["name"]} (idx {self._current_goal_idx})')
 
 
