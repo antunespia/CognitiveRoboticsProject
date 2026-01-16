@@ -1,0 +1,24 @@
+<!--
+  This Behavior Tree controls the behaviour of the museum guide
+-->
+
+<root BTCPP_format="4" main_tree_to_execute="MuseumGuide">
+    <BehaviorTree ID="MuseumGuide">
+        <Repeat num_cycles="10">
+            <!--RunOnce then_skip="false"-->
+            <Sequence name="Guide Visitors">
+                <Sequence name="Guide Visitors From A">
+                    <Wait wait_duration="1.0"/>
+                    </* ... */ pickup_point_a="/* ... */" pickup_point_b="/* ... */" art_location="/* ... */"/>
+                    </* copy tree from /opt/ros/jazzy/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_time.xml */>
+                </Sequence>
+                <Sequence name="Guide Visitors From B ">
+                    <Wait wait_duration="1.0"/>
+                    </* ... */ pickup_point_a="/* ... */" pickup_point_b="/* ... */" art_location="/* ... */"/>
+                    </* copy tree from /opt/ros/jazzy/share/nav2_bt_navigator/behavior_trees/navigate_w_replanning_time.xml */>
+                </Sequence>
+            </Sequence>
+            <!--/RunOnce-->
+        </Repeat>
+    </BehaviorTree>
+</root>

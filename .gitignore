@@ -1,0 +1,16 @@
+# ROS 2
+
+build/
+install/
+log/
+
+# Python
+
+__pycache__/
+*.pyc
+
+# Editors
+.vscode/
+
+# OS
+.DS_store
