@@ -1,5 +1,3 @@
-#Deteta se o slam parou (robot parou de mexer) e depois envia waypoints para o robot seguir
-
 import rclpy
 import math
 from rclpy.node import Node
@@ -32,7 +30,7 @@ class WaypointPublisher(Node):
         # For detecting stable pose
         self._last_pose = None  # (x,y,z,yaw)
         self._last_change_ns = self.get_clock().now().nanoseconds
-        self._stable_duration_sec = 40.0
+        self._stable_duration_sec = 10.0
         self._pos_tol = 1e-3
         self._yaw_tol = 0.01
 
@@ -203,6 +201,7 @@ class WaypointPublisher(Node):
         msg.pose.orientation.z = qz
         msg.pose.orientation.w = qw
         self.publisher_.publish(msg)
+        self._last_goal_publish_ns = now.nanoseconds
         self.get_logger().info(f'Published goal {wp["name"]} (idx {self._current_goal_idx})')
 
 
