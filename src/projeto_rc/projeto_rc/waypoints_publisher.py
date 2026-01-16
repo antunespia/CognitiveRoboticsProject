@@ -31,18 +31,23 @@ class WaypointPublisher(Node):
         self._last_pose = None  # (x,y,z,yaw)
         self._last_change_ns = self.get_clock().now().nanoseconds
         self._stable_duration_sec = 10.0
-        self._pos_tol = 1e-3
-        self._yaw_tol = 0.01
+        self._pos_tol = 0.05
+        self._yaw_tol = 0.1
 
         # Waypoint mission state
         self._waypoints = []
         self._current_goal_idx = None
         self._missions_started = False
-        self._goal_pos_tol = 0.2  # meters to consider reached
-        self._goal_yaw_tol = 0.2  # radians
-        self._goal_stable_required_s = 2.0
+        self._goal_pos_tol = 0.3  # meters to consider reached
+        self._goal_yaw_tol = 0.4  # radians
+        self._goal_stable_required_s = 0.5
         self._goal_reached_since_ns = None
         self._goal_published = False
+        
+        # UV-C disinfection state
+        self._uvc_lamp_on = False
+        self._disinfection_start_ns = None
+        self._last_countdown_print_ns = None
 
         # Load waypoints from config file
         try:
@@ -116,17 +121,41 @@ class WaypointPublisher(Node):
                 else:
                     held = (now_ns - self._goal_reached_since_ns) / 1e9
                     if held >= self._goal_stable_required_s:
-                        self.get_logger().info(f'Goal {self._waypoints[self._current_goal_idx]["name"]} reached')
-                        # advance to next goal
-                        self._current_goal_idx += 1
-                        self._goal_reached_since_ns = None
-                        self._goal_published = False
-                        if self._current_goal_idx >= len(self._waypoints):
-                            self.get_logger().info('All waypoints completed')
-                            self._current_goal_idx = None
-                        else:
-                            self._publish_current_goal()
-                            self._goal_published = True
+                        wp = self._waypoints[self._current_goal_idx]
+                        # Start disinfection: turn UV-C lamp on
+                        if not self._uvc_lamp_on:
+                            self._uvc_lamp_on = True
+                            self._disinfection_start_ns = now_ns
+                            self._last_countdown_print_ns = now_ns
+                            disinfection_time = wp.get('disinfection_time', 0.0)
+                            self.get_logger().info(f'Goal {wp["name"]} reached')
+                            self.get_logger().info(f'UV-C LAMP ON at {wp["name"]} - Disinfecting for {disinfection_time} seconds')
+                        # Check if disinfection time has elapsed
+                        disinfection_time = wp.get('disinfection_time', 0.0)
+                        disinfection_elapsed = (now_ns - self._disinfection_start_ns) / 1e9
+                        time_remaining = disinfection_time - disinfection_elapsed
+                        
+                        # Print countdown every second
+                        if (now_ns - self._last_countdown_print_ns) / 1e9 >= 1.0:
+                            if time_remaining > 0:
+                                self.get_logger().info(f'Disinfection in progress: {time_remaining:.1f} seconds remaining')
+                            self._last_countdown_print_ns = now_ns
+                        
+                        if disinfection_elapsed >= disinfection_time:
+                            self._uvc_lamp_on = False
+                            self.get_logger().info(f'UV-C LAMP OFF - Disinfection complete at {wp["name"]}')
+                            # advance to next goal
+                            self._current_goal_idx += 1
+                            self._goal_reached_since_ns = None
+                            self._goal_published = False
+                            self._disinfection_start_ns = None
+                            self._last_countdown_print_ns = None
+                            if self._current_goal_idx >= len(self._waypoints):
+                                self.get_logger().info('All waypoints completed')
+                                self._current_goal_idx = None
+                            else:
+                                self._publish_current_goal()
+                                self._goal_published = True
             else:
                 # not within tolerance
                 self._goal_reached_since_ns = None
@@ -173,7 +202,8 @@ class WaypointPublisher(Node):
                 y = float(parts[2])
                 z = float(parts[3])
                 yaw = float(parts[4])
-                waypoints.append({'name': name, 'coords': (x, y, z, yaw)})
+                disinfection_time = float(parts[5]) if len(parts) > 5 else 0.0
+                waypoints.append({'name': name, 'coords': (x, y, z, yaw), 'disinfection_time': disinfection_time})
         self._waypoints = waypoints
 
     def _yaw_to_quaternion(self, yaw):
