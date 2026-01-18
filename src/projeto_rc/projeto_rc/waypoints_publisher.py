@@ -30,7 +30,7 @@ class WaypointPublisher(Node):
         # For detecting stable pose
         self._last_pose = None  # (x,y,z,yaw)
         self._last_change_ns = self.get_clock().now().nanoseconds
-        self._stable_duration_sec = 10.0
+        self._stable_duration_sec = 35.0
         self._pos_tol = 0.05
         self._yaw_tol = 0.1
 
