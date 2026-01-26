@@ -112,10 +112,55 @@ class RoomCenterInflated(Node):
         self.get_logger().info(f"Loaded {len(self.seeds)} seeds from {self.seeds_file}")
 
         self.done = False
+        self.pose_stable = False
+        self._last_pose = None  # (x, y, z, yaw)
+        self._last_change_ns = self.get_clock().now().nanoseconds
+        self._stable_duration_sec = 30.0
+        self._pos_tol = 0.05
+        self._yaw_tol = 0.1
         self.create_subscription(OccupancyGrid, "/map", self.on_map, 10)
+        from nav_msgs.msg import Odometry
+        self.create_subscription(Odometry, "/odom", self.odometry_callback, 10)
+
+    def odometry_callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        z = msg.pose.pose.position.z
+        q = msg.pose.pose.orientation
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        )
+        current = (x, y, z, yaw)
+        if self._last_pose is None:
+            self._last_pose = current
+            self._last_change_ns = self.get_clock().now().nanoseconds
+            return
+        def angle_diff(a, b):
+            return abs(math.atan2(math.sin(a - b), math.cos(a - b)))
+        dx = abs(current[0] - self._last_pose[0])
+        dy = abs(current[1] - self._last_pose[1])
+        dz = abs(current[2] - self._last_pose[2])
+        dyaw = angle_diff(current[3], self._last_pose[3])
+        if dx > self._pos_tol or dy > self._pos_tol or dz > self._pos_tol or dyaw > self._yaw_tol:
+            self._last_pose = current
+            self._last_change_ns = self.get_clock().now().nanoseconds
+            self.pose_stable = False
+        else:
+            now_ns = self.get_clock().now().nanoseconds
+            elapsed = (now_ns - self._last_change_ns) / 1e9
+            if elapsed >= self._stable_duration_sec:
+                if not self.pose_stable:
+                    self.get_logger().info(f"Pose estável há {elapsed:.1f}s, pronto para processar mapa.")
+                self.pose_stable = True
+            else:
+                self.pose_stable = False
 
     def on_map(self, msg: OccupancyGrid):
         if self.done:
+            return
+        if not self.pose_stable:
+            self.get_logger().info("A aguardar que o robô fique parado durante 30 segundos antes de processar o mapa...")
             return
         self.done = True
 
