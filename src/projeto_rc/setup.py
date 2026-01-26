@@ -29,6 +29,10 @@ setup(
     entry_points={
         'console_scripts': [
             'waypoints_publisher = projeto_rc.waypoints_publisher:main',
+            'room_floodfill_test = projeto_rc.room_floodfill_test:main',
+            'room_save_current_room = projeto_rc.room_save_current_room:main',
+            'routeplanner = projeto_rc.routeplanner:main',
+            'room_center_from_seed = projeto_rc.room_center_from_seed:main',
         ],
     },
 )
